@@ -58,3 +58,7 @@ src/frontend/cypress/screenshots
 src/shipping/target/
 
 !src/currency/build
+
+# Local, never committed: secrets and per-environment overrides
+.env.local
+src/keycloak/realm-*.json

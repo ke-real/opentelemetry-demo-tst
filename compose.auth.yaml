@@ -1,0 +1,58 @@
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+
+# Auth layer: Keycloak as the OpenID Connect provider for the client MCP and the support API.
+#
+# Not in git (provide them out of band, e.g. via the Azure Terraform):
+#   src/keycloak/realm-astronomy.json  realm with roles, users, clients (imported on start)
+#   .env.local                         KEYCLOAK_ADMIN_PASSWORD and other local secrets/overrides
+#
+# Usage:
+#   docker compose --env-file .env --env-file .env.local \
+#     -f compose.yaml -f compose.full.yaml -f compose.observability.yaml \
+#     -f compose.agent.yaml -f compose.auth.yaml -f compose.extras.yaml up -d
+#
+# KEYCLOAK_PUBLIC_URL is the browser-facing base URL and therefore the token issuer:
+# http://localhost:8180 locally and through an SSH tunnel, https://<vm-fqdn> when published via HTTPS.
+# Containers reach Keycloak at http://keycloak:8080 for JWKS / token exchange.
+
+services:
+  keycloak:
+    image: ${KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.4}
+    container_name: keycloak
+    command: ["start-dev", "--import-realm"]
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    restart: unless-stopped
+    ports:
+      - "${KEYCLOAK_PORT:-8180}:8080"
+    environment:
+      - KC_BOOTSTRAP_ADMIN_USERNAME=admin
+      - KC_BOOTSTRAP_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD:?set KEYCLOAK_ADMIN_PASSWORD in .env.local}
+      - KC_HOSTNAME=${KEYCLOAK_PUBLIC_URL:-http://localhost:8180}
+      - KC_HOSTNAME_BACKCHANNEL_DYNAMIC=true
+      - KC_HTTP_ENABLED=true
+      - KC_PROXY_HEADERS=xforwarded
+      - KC_HEALTH_ENABLED=true
+      - KC_TRACING_ENABLED=true
+      - KC_TRACING_ENDPOINT=http://${OTEL_COLLECTOR_HOST}:${OTEL_COLLECTOR_PORT_GRPC}
+      - KC_TRACING_SERVICE_NAME=keycloak
+      - KC_TRACING_RESOURCE_ATTRIBUTES=${OTEL_RESOURCE_ATTRIBUTES},service.criticality=high
+    volumes:
+      - ./src/keycloak/realm-astronomy.json:/opt/keycloak/data/import/realm-astronomy.json:ro
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q UP <&3"]
+      start_period: 30s
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    depends_on:
+      otel-collector:
+        condition: service_started
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
