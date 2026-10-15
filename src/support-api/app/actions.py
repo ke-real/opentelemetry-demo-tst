@@ -11,6 +11,7 @@ from psycopg.types.json import Jsonb
 from pydantic import BaseModel, Field, ValidationError
 
 from . import clients, db, orders
+from .auth import ADMIN, AGENT, Principal, forbidden
 from .config import settings
 from .errors import ApiError, not_found
 
@@ -76,16 +77,19 @@ async def shopper_replay(order_id: str, user_id: str | None, email: str | None, 
             "steps": steps}
 
 
-def _mask_replay(replay: dict) -> dict:
+def mask_replay(replay: dict) -> dict:
+    """Replay plan without PII: email, street, zip and card masked (not executable as is)."""
     steps = []
     for s in replay["steps"]:
         if s["tool"] == "checkout":
             person = dict(s["arguments"]["checkout_person"])
             person["email"] = orders.mask_email(person["email"])
             person["creditCard"] = {"creditCardNumber": "****-0454 (test card)"}
+            if person.get("address"):
+                person["address"] = person["address"] | {"streetAddress": "***", "zipCode": "***"}
             s = {"tool": "checkout", "arguments": {"checkout_person": person}}
         steps.append(s)
-    return replay | {"steps": steps}
+    return replay | {"steps": steps, "pii_redacted": True}
 
 
 # --- Planners and executors -------------------------------------------------------
@@ -169,7 +173,7 @@ async def plan_replay(p: ReplayParams) -> dict:
         warnings.append(f"Empties the current cart of user {p.user_id} first")
     return {
         "summary": f"Replay order {p.order_id} as user {replay['user_id']} via the shopper flow ({len(replay['steps']) - 2} products)",
-        "steps": _mask_replay(replay)["steps"],
+        "steps": mask_replay(replay)["steps"],
         "warnings": warnings,
         "order_id": p.order_id,
         "inputs": replay,
@@ -226,27 +230,29 @@ class ActionType:
     name: str
     description: str
     risk: str
+    role: str
     params: type[BaseModel]
     plan: Callable[[BaseModel], Awaitable[dict]]
     execute: Callable[[dict, object], Awaitable[dict]]
 
 
 ACTION_TYPES = {a.name: a for a in [
-    ActionType("resend_order_confirmation", "Re-send the order confirmation email.", "low",
+    ActionType("resend_order_confirmation", "Re-send the order confirmation email.", "low", AGENT,
                ResendConfirmationParams, plan_resend, exec_resend),
-    ActionType("reship_order", "Create a replacement shipment (new tracking id, no charge).", "medium",
+    ActionType("reship_order", "Create a replacement shipment (new tracking id, no charge).", "medium", AGENT,
                ReshipParams, plan_reship, exec_reship),
-    ActionType("reset_cart", "Empty a user's shopping cart (e.g. stuck or corrupted cart).", "medium",
+    ActionType("reset_cart", "Empty a user's shopping cart (e.g. stuck or corrupted cart).", "medium", AGENT,
                ResetCartParams, plan_reset_cart, exec_reset_cart),
-    ActionType("replay_order", "Place a new order with the same items through the shopper flow (reproduce an issue or re-create a lost order).", "high",
+    ActionType("replay_order", "Place a new order with the same items through the shopper flow (reproduce an issue or re-create a lost order).", "high", ADMIN,
                ReplayParams, plan_replay, exec_replay),
-    ActionType("set_feature_flag", "Change a feature flag's default variant (e.g. disable a failure flag).", "high",
+    ActionType("set_feature_flag", "Change a feature flag's default variant (e.g. disable a failure flag).", "high", ADMIN,
                SetFeatureFlagParams, plan_set_flag, exec_set_flag),
 ]}
 
 
-def describe_types() -> list[dict]:
-    return [{"type": a.name, "description": a.description, "risk": a.risk, "params_schema": a.params.model_json_schema()}
+def describe_types(principal: Principal) -> list[dict]:
+    return [{"type": a.name, "description": a.description, "risk": a.risk, "required_role": a.role,
+             "allowed": principal.has(a.role), "params_schema": a.params.model_json_schema()}
             for a in ACTION_TYPES.values()]
 
 
@@ -274,14 +280,20 @@ async def _get(action_id: str) -> dict:
     return row
 
 
-async def propose(type_: str, params: dict, reason: str | None, actor: str, idempotency_key: str | None) -> tuple[dict, bool]:
-    if idempotency_key:
-        existing = await db.fetch_one("SELECT * FROM support.actions WHERE idempotency_key = %s", idempotency_key)
-        if existing:
-            return public(existing), False
+async def propose(type_: str, params: dict, reason: str | None, principal: Principal,
+                  idempotency_key: str | None) -> tuple[dict, bool]:
     action_type = ACTION_TYPES.get(type_)
     if not action_type:
         raise ApiError(422, "unknown_action_type", f"Unknown action type '{type_}'", {"known": list(ACTION_TYPES)})
+    if not principal.has(action_type.role):
+        raise forbidden(principal, [action_type.role], f"Proposing '{type_}'")
+    actor = principal.name
+    if idempotency_key:
+        existing = await db.fetch_one("SELECT * FROM support.actions WHERE idempotency_key = %s", idempotency_key)
+        if existing:
+            if existing["requested_by"] != actor:
+                raise ApiError(409, "idempotency_key_conflict", "This Idempotency-Key was used by another requester")
+            return public(existing), False
     try:
         parsed = action_type.params.model_validate(params)
     except ValidationError as e:
@@ -292,15 +304,16 @@ async def propose(type_: str, params: dict, reason: str | None, actor: str, idem
         " VALUES (%s, 'PENDING_APPROVAL', %s, %s, %s, %s, %s, %s) RETURNING *",
         type_, Jsonb(parsed.model_dump(mode="json")), Jsonb(plan), reason, actor, idempotency_key,
         datetime.now(timezone.utc) + timedelta(minutes=settings.action_ttl_minutes))
-    await db.audit(actor, "PROPOSED", row["id"], {"type": type_, "summary": plan["summary"]})
+    await db.audit(principal.label, "PROPOSED", row["id"], {"type": type_, "summary": plan["summary"]})
     return public(row), True
 
 
-async def decide(action_id: str, approve: bool, actor: str, comment: str | None) -> dict:
+async def decide(action_id: str, approve: bool, principal: Principal, comment: str | None) -> dict:
+    actor = principal.name
     row = await _get(action_id)
     if row["status"] != "PENDING_APPROVAL":
         raise ApiError(409, "invalid_state", f"Action is {row['status']}, expected PENDING_APPROVAL", {"status": row["status"]})
-    if approve and settings.require_distinct_approver and actor == row["requested_by"]:
+    if approve and settings.require_distinct_approver and principal.kind != "anonymous" and actor == row["requested_by"]:
         raise ApiError(403, "approver_must_differ", "The requester cannot approve their own action")
     status = "APPROVED" if approve else "REJECTED"
     row = await db.fetch_one(
@@ -308,29 +321,38 @@ async def decide(action_id: str, approve: bool, actor: str, comment: str | None)
         " WHERE id = %s AND status = 'PENDING_APPROVAL' RETURNING *", status, actor, comment, action_id)
     if not row:
         raise ApiError(409, "invalid_state", "Action was decided concurrently")
-    await db.audit(actor, status, row["id"], {"comment": comment})
+    await db.audit(principal.label, status, row["id"], {"comment": comment})
     return public(row)
 
 
-async def execute(action_id: str, actor: str) -> dict:
+async def execute(action_id: str, principal: Principal) -> dict:
+    actor = principal.name
     row = await _get(action_id)
+    action_type = ACTION_TYPES.get(row["type"])
+    if not principal.has(ADMIN):
+        if actor != row["requested_by"]:
+            raise ApiError(403, "forbidden", "Only the requester or a Support.Admin can execute this action",
+                           {"requested_by": row["requested_by"], "caller": actor})
+        if not action_type or not principal.has(action_type.role):
+            raise forbidden(principal, [action_type.role if action_type else ADMIN], f"Executing '{row['type']}'")
     if row["status"] in ("EXECUTED", "FAILED"):
         return public(row)
+    if not action_type:
+        raise ApiError(409, "unknown_action_type", f"Action type '{row['type']}' no longer exists; it cannot be executed")
     claimed = await db.fetch_one(
         "UPDATE support.actions SET status = 'EXECUTING' WHERE id = %s AND status = 'APPROVED' RETURNING *", action_id)
     if not claimed:
         raise ApiError(409, "invalid_state", f"Action is {row['status']}, expected APPROVED", {"status": row["status"]})
-    action_type = ACTION_TYPES[row["type"]]
     try:
         result = await action_type.execute(row["plan"]["inputs"], row["id"])
         row = await db.fetch_one("UPDATE support.actions SET status = 'EXECUTED', executed_at = now(), result = %s"
                                  " WHERE id = %s RETURNING *", Jsonb(result), action_id)
-        await db.audit(actor, "EXECUTED", row["id"], result)
+        await db.audit(principal.label, "EXECUTED", row["id"], result)
     except Exception as e:
         message = f"{e.code}: {e.message}" if isinstance(e, ApiError) else f"{type(e).__name__}: {e}"
         row = await db.fetch_one("UPDATE support.actions SET status = 'FAILED', executed_at = now(), error = %s"
                                  " WHERE id = %s RETURNING *", message, action_id)
-        await db.audit(actor, "FAILED", row["id"], {"error": message})
+        await db.audit(principal.label, "FAILED", row["id"], {"error": message})
     return public(row)
 
 

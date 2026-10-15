@@ -2,10 +2,37 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Astronomy Shop Support API",
-    "description": "\nInternal support API for the Astronomy Shop. Not routed through frontend-proxy; meant for support\ntooling such as a support MCP server.\n\n* **Reads** (orders, timelines, carts, flags, diagnostics) are safe to call freely. PII is redacted\n  unless `include_pii=true`.\n* **Writes** go through actions with a human in the loop: `proposeAction` (dry run with plan) →\n  `approveAction` / `rejectAction` → `executeAction`. Only the approved plan is executed.\n\nAuth: `X-API-Key` header. Attribution: `X-Support-Actor` header (who is calling: user or agent id).\n",
-    "version": "1.0.0"
+    "description": "\nInternal support API for the Astronomy Shop. Not routed through frontend-proxy; meant for support\ntooling such as a support MCP server.\n\n* **Reads** (orders, timelines, carts, flags, diagnostics) need `Shop.Viewer`. PII is redacted; `include_pii=true`\n  needs `Support.Admin`.\n* **Writes** go through actions with a human in the loop: `proposeAction` (dry run with plan; role per action type,\n  see `listActionTypes`) \u2192 `approveAction` / `rejectAction` (`Support.Approver`, not the requester) \u2192\n  `executeAction` (requester or `Support.Admin`). Only the approved plan is executed.\n\nAuth: `Authorization: Bearer <OIDC access token>` with `aud: support-api`; the caller's identity and roles come from\nthe token. Service-to-service: `X-API-Key` (roles from `SUPPORT_API_KEY_ROLES`).\n",
+    "version": "1.1.0"
   },
   "paths": {
+    "/v1/me": {
+      "get": {
+        "tags": [
+          "meta"
+        ],
+        "summary": "Who am I: caller identity and effective roles",
+        "operationId": "getMe",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
     "/v1/orders": {
       "get": {
         "tags": [
@@ -13,6 +40,14 @@
         ],
         "summary": "Search orders, newest first",
         "operationId": "searchOrders",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
         "parameters": [
           {
             "name": "limit",
@@ -105,24 +140,6 @@
               "title": "Since"
             },
             "description": "ISO 8601; orders created at or after"
-          },
-          {
-            "name": "x-api-key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Shared API key (SUPPORT_API_KEY).",
-              "title": "X-Api-Key"
-            },
-            "description": "Shared API key (SUPPORT_API_KEY)."
           }
         ],
         "responses": {
@@ -154,6 +171,14 @@
         ],
         "summary": "Order details: items, totals, shipments, customer, trace link",
         "operationId": "getOrder",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
         "parameters": [
           {
             "name": "order_id",
@@ -170,27 +195,11 @@
             "required": false,
             "schema": {
               "type": "boolean",
+              "description": "Requires Support.Admin",
               "default": false,
               "title": "Include Pii"
-            }
-          },
-          {
-            "name": "x-api-key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Shared API key (SUPPORT_API_KEY).",
-              "title": "X-Api-Key"
             },
-            "description": "Shared API key (SUPPORT_API_KEY)."
+            "description": "Requires Support.Admin"
           }
         ],
         "responses": {
@@ -222,6 +231,14 @@
         ],
         "summary": "What happened to this order: checkout trace spans merged with support events",
         "operationId": "getOrderTimeline",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
         "parameters": [
           {
             "name": "order_id",
@@ -252,27 +269,11 @@
             "required": false,
             "schema": {
               "type": "boolean",
+              "description": "Requires Support.Admin",
               "default": false,
               "title": "Include Pii"
-            }
-          },
-          {
-            "name": "x-api-key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Shared API key (SUPPORT_API_KEY).",
-              "title": "X-Api-Key"
             },
-            "description": "Shared API key (SUPPORT_API_KEY)."
+            "description": "Requires Support.Admin"
           }
         ],
         "responses": {
@@ -302,8 +303,16 @@
         "tags": [
           "orders"
         ],
-        "summary": "Shopper MCP tool calls that would re-create this order (for executing via the shopper MCP)",
+        "summary": "Shopper MCP tool calls that would re-create this order (PII masked unless Support.Admin)",
         "operationId": "getShopperReplay",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
         "parameters": [
           {
             "name": "order_id",
@@ -361,24 +370,6 @@
               ],
               "title": "Currency"
             }
-          },
-          {
-            "name": "x-api-key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Shared API key (SUPPORT_API_KEY).",
-              "title": "X-Api-Key"
-            },
-            "description": "Shared API key (SUPPORT_API_KEY)."
           }
         ],
         "responses": {
@@ -410,6 +401,14 @@
         ],
         "summary": "Current cart of a shop user",
         "operationId": "getCart",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
         "parameters": [
           {
             "name": "user_id",
@@ -419,24 +418,6 @@
               "type": "string",
               "title": "User Id"
             }
-          },
-          {
-            "name": "x-api-key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Shared API key (SUPPORT_API_KEY).",
-              "title": "X-Api-Key"
-            },
-            "description": "Shared API key (SUPPORT_API_KEY)."
           }
         ],
         "responses": {
@@ -468,6 +449,14 @@
         ],
         "summary": "All feature flags with their current variant",
         "operationId": "listFlags",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
         "parameters": [
           {
             "name": "active_only",
@@ -478,24 +467,6 @@
               "default": false,
               "title": "Active Only"
             }
-          },
-          {
-            "name": "x-api-key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Shared API key (SUPPORT_API_KEY).",
-              "title": "X-Api-Key"
-            },
-            "description": "Shared API key (SUPPORT_API_KEY)."
           }
         ],
         "responses": {
@@ -527,6 +498,14 @@
         ],
         "summary": "Snapshot: active failure flags, per-service error ratio and p95, dependency health",
         "operationId": "getDiagnostics",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
         "parameters": [
           {
             "name": "window",
@@ -551,24 +530,6 @@
               "default": 0.05,
               "title": "Error Threshold"
             }
-          },
-          {
-            "name": "x-api-key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Shared API key (SUPPORT_API_KEY).",
-              "title": "X-Api-Key"
-            },
-            "description": "Shared API key (SUPPORT_API_KEY)."
           }
         ],
         "responses": {
@@ -598,28 +559,8 @@
         "tags": [
           "actions"
         ],
-        "summary": "Available actions with risk level and params JSON schema",
+        "summary": "Available actions: risk, required role, whether the caller may propose it, params JSON schema",
         "operationId": "listActionTypes",
-        "parameters": [
-          {
-            "name": "x-api-key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Shared API key (SUPPORT_API_KEY).",
-              "title": "X-Api-Key"
-            },
-            "description": "Shared API key (SUPPORT_API_KEY)."
-          }
-        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -628,18 +569,16 @@
                 "schema": {}
               }
             }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
           }
-        }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
       }
     },
     "/v1/actions": {
@@ -647,8 +586,16 @@
         "tags": [
           "actions"
         ],
-        "summary": "Propose an action: validates and dry-runs it, returns the plan in PENDING_APPROVAL",
+        "summary": "Propose an action (role per action type): validates and dry-runs it, returns the plan in PENDING_APPROVAL",
         "operationId": "proposeAction",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
         "parameters": [
           {
             "name": "idempotency-key",
@@ -667,42 +614,6 @@
               "title": "Idempotency-Key"
             },
             "description": "Repeat-safe proposals: same key returns the same action"
-          },
-          {
-            "name": "x-api-key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Shared API key (SUPPORT_API_KEY).",
-              "title": "X-Api-Key"
-            },
-            "description": "Shared API key (SUPPORT_API_KEY)."
-          },
-          {
-            "name": "x-support-actor",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Who is acting, e.g. 'mcp:support/jane.doe'.",
-              "title": "X-Support-Actor"
-            },
-            "description": "Who is acting, e.g. 'mcp:support/jane.doe'."
           }
         ],
         "requestBody": {
@@ -742,6 +653,14 @@
         ],
         "summary": "List actions",
         "operationId": "listActions",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
         "parameters": [
           {
             "name": "status",
@@ -788,24 +707,6 @@
               "default": 50,
               "title": "Limit"
             }
-          },
-          {
-            "name": "x-api-key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Shared API key (SUPPORT_API_KEY).",
-              "title": "X-Api-Key"
-            },
-            "description": "Shared API key (SUPPORT_API_KEY)."
           }
         ],
         "responses": {
@@ -837,6 +738,14 @@
         ],
         "summary": "Get an action",
         "operationId": "getAction",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
         "parameters": [
           {
             "name": "action_id",
@@ -846,24 +755,6 @@
               "type": "string",
               "title": "Action Id"
             }
-          },
-          {
-            "name": "x-api-key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Shared API key (SUPPORT_API_KEY).",
-              "title": "X-Api-Key"
-            },
-            "description": "Shared API key (SUPPORT_API_KEY)."
           }
         ],
         "responses": {
@@ -893,8 +784,16 @@
         "tags": [
           "actions"
         ],
-        "summary": "Approve a proposed action (human decision)",
+        "summary": "Approve a proposed action (Support.Approver; not your own when distinct approvers are required)",
         "operationId": "approveAction",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
         "parameters": [
           {
             "name": "action_id",
@@ -904,42 +803,6 @@
               "type": "string",
               "title": "Action Id"
             }
-          },
-          {
-            "name": "x-api-key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Shared API key (SUPPORT_API_KEY).",
-              "title": "X-Api-Key"
-            },
-            "description": "Shared API key (SUPPORT_API_KEY)."
-          },
-          {
-            "name": "x-support-actor",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Who is acting, e.g. 'mcp:support/jane.doe'.",
-              "title": "X-Support-Actor"
-            },
-            "description": "Who is acting, e.g. 'mcp:support/jane.doe'."
           }
         ],
         "requestBody": {
@@ -986,8 +849,16 @@
         "tags": [
           "actions"
         ],
-        "summary": "Reject a proposed action",
+        "summary": "Reject a proposed action (Support.Approver)",
         "operationId": "rejectAction",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
         "parameters": [
           {
             "name": "action_id",
@@ -997,42 +868,6 @@
               "type": "string",
               "title": "Action Id"
             }
-          },
-          {
-            "name": "x-api-key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Shared API key (SUPPORT_API_KEY).",
-              "title": "X-Api-Key"
-            },
-            "description": "Shared API key (SUPPORT_API_KEY)."
-          },
-          {
-            "name": "x-support-actor",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Who is acting, e.g. 'mcp:support/jane.doe'.",
-              "title": "X-Support-Actor"
-            },
-            "description": "Who is acting, e.g. 'mcp:support/jane.doe'."
           }
         ],
         "requestBody": {
@@ -1079,8 +914,16 @@
         "tags": [
           "actions"
         ],
-        "summary": "Execute an APPROVED action. Idempotent: re-calling returns the stored outcome",
+        "summary": "Execute an APPROVED action (requester or Support.Admin). Idempotent: re-calling returns the stored outcome",
         "operationId": "executeAction",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
         "parameters": [
           {
             "name": "action_id",
@@ -1090,42 +933,6 @@
               "type": "string",
               "title": "Action Id"
             }
-          },
-          {
-            "name": "x-api-key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Shared API key (SUPPORT_API_KEY).",
-              "title": "X-Api-Key"
-            },
-            "description": "Shared API key (SUPPORT_API_KEY)."
-          },
-          {
-            "name": "x-support-actor",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Who is acting, e.g. 'mcp:support/jane.doe'.",
-              "title": "X-Support-Actor"
-            },
-            "description": "Who is acting, e.g. 'mcp:support/jane.doe'."
           }
         ],
         "responses": {
@@ -1155,8 +962,16 @@
         "tags": [
           "actions"
         ],
-        "summary": "Audit log of support actions",
+        "summary": "Audit log of support actions (Support.Approver or Support.Admin)",
         "operationId": "listAudit",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
         "parameters": [
           {
             "name": "action_id",
@@ -1185,24 +1000,6 @@
               "default": 100,
               "title": "Limit"
             }
-          },
-          {
-            "name": "x-api-key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Shared API key (SUPPORT_API_KEY).",
-              "title": "X-Api-Key"
-            },
-            "description": "Shared API key (SUPPORT_API_KEY)."
           }
         ],
         "responses": {
@@ -1330,6 +1127,19 @@
           "type"
         ],
         "title": "ValidationError"
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "type": "http",
+        "description": "OIDC access token (aud: support-api)",
+        "scheme": "bearer"
+      },
+      "APIKeyHeader": {
+        "type": "apiKey",
+        "description": "Service-to-service key",
+        "in": "header",
+        "name": "X-API-Key"
       }
     }
   }

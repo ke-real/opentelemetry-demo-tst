@@ -11,15 +11,46 @@ It is **not** routed through `frontend-proxy` and is invisible to the shop UI.
 | From the host | `http://localhost:8020` |
 | From the Docker network | `http://support-api:8020` |
 | OpenAPI | `GET /openapi.json` (also committed: [`openapi.json`](openapi.json)), Swagger UI at `/docs` |
-| Auth | `X-API-Key: <SUPPORT_API_KEY>` (`dev-support-key` in `.env`) |
-| Attribution | `X-Support-Actor: <who>`, e.g. `mcp:support/jane.doe`. Recorded on every action and in the audit log |
+| Auth (users) | `Authorization: Bearer <access token>` from Keycloak with `aud: support-api`. Identity and roles come from the token; see [Authentication and roles](#authentication-and-roles) |
+| Auth (services) | `X-API-Key: <SUPPORT_API_KEY>` → roles from `SUPPORT_API_KEY_ROLES` (default read-only `Shop.Viewer`) |
 | Shopper MCP (customer flows) | `http://localhost:8011/mcp` (streamable HTTP) |
 
-Start it with the agent layer, which also starts `mcp`, `agent` and `chatbot`:
+Start it with the agent and auth layers (Keycloak needs `.env.local` and the realm file, see `src/keycloak/README.md`):
 
 ```bash
-docker compose -f compose.yaml -f compose.full.yaml -f compose.observability.yaml -f compose.agent.yaml -f compose.extras.yaml up -d --build support-api
+docker compose --env-file .env --env-file .env.local -f compose.yaml -f compose.full.yaml -f compose.observability.yaml \
+  -f compose.agent.yaml -f compose.auth.yaml -f compose.extras.yaml up -d --build support-api
 ```
+
+## Authentication and roles
+
+Callers send an OIDC access token. The API checks:
+- the signature, against keys from `OIDC_JWKS_URL`
+- `iss` = `OIDC_ISSUER`
+- `aud` contains `support-api`
+- expiry
+
+It then reads the user from `preferred_username` and the roles from `realm_access.roles` (configurable with
+`OIDC_USERNAME_CLAIM` / `OIDC_ROLES_CLAIM`, so Entra or Auth0 is a config change).
+
+A support MCP gets such a token by **exchanging the user's MCP token** at Keycloak (`client-mcp` → `audience=support-api`,
+`scope=support-api-audience`). The call is then made *as the user*. A token issued for `client-mcp` itself is rejected (401).
+
+| Role | Can |
+|---|---|
+| `Shop.Viewer` | all reads, PII redacted; `listActionTypes` |
+| `Support.Agent` (includes Viewer) | propose `resend_order_confirmation`, `reship_order`, `reset_cart`; list/get actions; execute **own** approved actions |
+| `Support.Approver` (includes Viewer) | approve / reject; list/get actions; audit log |
+| `Support.Admin` (includes Agent) | propose `replay_order`, `set_feature_flag`; `include_pii=true`; unmasked shopper replay; execute anyone's approved action; audit log |
+
+- **Four eyes:** with `SUPPORT_REQUIRE_DISTINCT_APPROVER=true` (default), nobody approves their own proposal, admins included.
+- The role hierarchy is applied by the API too, so it also holds for providers without composite roles.
+- `GET /v1/me` shows the caller's name and effective roles. `listActionTypes` marks each type `allowed` for the caller.
+- API-key callers all act as the identity `service`. Their optional `X-Support-Actor` is recorded in the audit
+  log (`service (on behalf of <value>)`) but never changes who they are: it can't get around the four-eyes or
+  requester checks, and it never overrides a token's user.
+- With `SUPPORT_AUTH_DISABLED=true`, the four-eyes rule is skipped, since every caller is the same anonymous user.
+- `SUPPORT_AUTH_DISABLED=true` (local development only) makes every caller an anonymous user with all roles.
 
 On start it migrates the database (idempotent; see `app/migrations/`):
 - adds `created_at`, `status`, `user_id`, `trace_id` to `accounting."order"`
@@ -67,15 +98,17 @@ POST /v1/actions/{id}/execute       → EXECUTED | FAILED     (result / error)
   `set_feature_flag` additionally refuses (`409 flag_changed`) if the flag changed since the proposal.
 - Proposals expire after `SUPPORT_ACTION_TTL_MINUTES` (default 30) → `EXPIRED`.
 - `Idempotency-Key` header on propose: the same key returns the existing action (HTTP 200 instead of 201).
+  Reusing another requester's key returns `409 idempotency_key_conflict`.
 - `execute` is idempotent: calling it again on `EXECUTED`/`FAILED` returns the stored outcome.
-- `SUPPORT_REQUIRE_DISTINCT_APPROVER=true` → the requester can't approve their own action (`403`).
+- `SUPPORT_REQUIRE_DISTINCT_APPROVER=true` (default) → the requester can't approve their own action (`403 approver_must_differ`).
 
 ### Recommended pattern in the support MCP
 
-1. Tool `propose_<action>` → `proposeAction`, return `plan.summary` + `plan.warnings` to the model.
-2. **Ask the human** (MCP elicitation, or your approval UI) showing summary, warnings and risk.
-3. Only on a human "yes": `approveAction` with `X-Support-Actor` = the human, then `executeAction`.
-   **Do not expose `approveAction` as a tool the LLM can call by itself**, or the approval step means nothing.
+1. Tool `propose_<action>` → `proposeAction` with the user's exchanged token; return `plan.summary` + `plan.warnings`.
+2. A **different person with `Support.Approver`** approves, outside the chat (support API, approval UI, Teams/Jira link).
+   **Do not expose `approveAction` as a tool the LLM can call**: the four-eyes rule would block the requester anyway,
+   but the approval should not run through the requester's chat.
+3. Once approved, the requester (or an admin) calls `executeAction`.
 4. Return `result` (e.g. new tracking id or new order id) and the trace link.
 
 ## Repeating shopper actions
@@ -132,9 +165,24 @@ Every error has the same shape:
 
 ## Quick check
 
+Reads with the service key:
+
 ```bash
 curl -s -H "X-API-Key: dev-support-key" localhost:8020/v1/diagnostics
-curl -s -H "X-API-Key: dev-support-key" "localhost:8020/v1/orders?limit=5"
-curl -s -H "X-API-Key: dev-support-key" -H "X-Support-Actor: me" -H "Content-Type: application/json" \
-  -X POST localhost:8020/v1/actions -d '{"type":"set_feature_flag","params":{"flag":"paymentFailure","variant":"off"},"reason":"INC-1"}'
 ```
+
+As a user: log in as `agent` (dev-only password grant), exchange the token for `support-api` like the MCP does,
+then propose:
+
+```bash
+KC=http://localhost:8180/realms/astronomy/protocol/openid-connect/token
+USER_TOKEN=$(curl -s -d grant_type=password -d client_id=mcp-public -d username=agent -d password=agent-demo $KC | jq -r .access_token)
+TOKEN=$(curl -s -u client-mcp:client-mcp-dev-secret -d grant_type=urn:ietf:params:oauth:grant-type:token-exchange \
+  -d subject_token=$USER_TOKEN -d subject_token_type=urn:ietf:params:oauth:token-type:access_token \
+  -d audience=support-api -d scope=support-api-audience $KC | jq -r .access_token)
+curl -s -H "Authorization: Bearer $TOKEN" localhost:8020/v1/me
+curl -s -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -X POST localhost:8020/v1/actions \
+  -d '{"type":"reset_cart","params":{"user_id":"some-user"},"reason":"INC-1"}'
+```
+
+Tests (no stack needed): `cd src/support-api && uv run --with-requirements requirements.txt --with pytest --with pytest-asyncio pytest`.

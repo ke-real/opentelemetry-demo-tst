@@ -5,12 +5,14 @@
 class ApiError(Exception):
     """Rendered as {"error": {"code", "message", "details"}} with the given HTTP status."""
 
-    def __init__(self, status: int, code: str, message: str, details: dict | None = None):
+    def __init__(self, status: int, code: str, message: str, details: dict | None = None,
+                 headers: dict[str, str] | None = None):
         super().__init__(message)
         self.status = status
         self.code = code
         self.message = message
         self.details = details or {}
+        self.headers = headers
 
 
 def not_found(what: str, ident: str) -> ApiError:

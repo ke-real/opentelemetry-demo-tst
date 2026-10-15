@@ -157,6 +157,11 @@ services:
       - SUPPORT_DB_ADMIN_URL=postgresql://postgres:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/astronomy_db
       - SUPPORT_REQUIRE_DISTINCT_APPROVER
       - SUPPORT_ACTION_TTL_MINUTES
+      - SUPPORT_API_KEY_ROLES
+      - SUPPORT_AUTH_DISABLED
+      - OIDC_ISSUER=${KEYCLOAK_PUBLIC_URL:-http://localhost:8180}/realms/astronomy
+      - OIDC_JWKS_URL=http://keycloak:8080/realms/astronomy/protocol/openid-connect/certs
+      - OIDC_AUDIENCE=support-api
       - APPLICATION_ENDPOINT
       - EMAIL_ADDR
       - SHIPPING_ADDR
