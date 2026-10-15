@@ -25,7 +25,7 @@ services:
           memory: 500M
     restart: unless-stopped
     ports:
-      - "${AGENT_PORT}"
+      - "${AGENT_PORT}:${AGENT_PORT}"
     volumes:
       - ./src/agent/fixtures:/app/fixtures
     environment:
@@ -78,7 +78,7 @@ services:
           memory: 500M
     restart: unless-stopped
     ports:
-      - "${MCP_PORT}"
+      - "${MCP_PORT}:${MCP_PORT}"
     environment:
       - TRACELOOP_BASE_URL
       - MCP_ENDPOINT
@@ -128,6 +128,59 @@ services:
         condition: service_started
       opamp-server:
         condition: service_healthy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+  # Support API: internal order/flag/diagnostics API with human-approved actions,
+  # consumed by support tooling (e.g. a support MCP). Not routed by frontend-proxy.
+  support-api:
+    image: ${IMAGE_NAME}:${DEMO_VERSION}-support-api
+    container_name: support-api
+    build:
+      context: ./
+      dockerfile: ${SUPPORT_API_DOCKERFILE}
+    deploy:
+      resources:
+        limits:
+          memory: 200M
+    restart: unless-stopped
+    ports:
+      - "${SUPPORT_API_PORT}:${SUPPORT_API_PORT}"
+    environment:
+      - SUPPORT_API_PORT
+      - SUPPORT_API_KEY
+      - SUPPORT_DB_PASSWORD
+      - SUPPORT_DB_URL=postgresql://support_user:${SUPPORT_DB_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/astronomy_db
+      - SUPPORT_DB_ADMIN_URL=postgresql://postgres:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/astronomy_db
+      - SUPPORT_REQUIRE_DISTINCT_APPROVER
+      - SUPPORT_ACTION_TTL_MINUTES
+      - APPLICATION_ENDPOINT
+      - EMAIL_ADDR
+      - SHIPPING_ADDR
+      - PROMETHEUS_ADDR
+      - FLAGD_UI_URL=http://${FLAGD_UI_HOST}:${FLAGD_UI_PORT}
+      - JAEGER_QUERY_URL=http://${JAEGER_HOST}:${JAEGER_UI_PORT}/jaeger/ui
+      - JAEGER_PUBLIC_URL=http://localhost:${ENVOY_PORT}/jaeger/ui
+      - OTEL_EXPORTER_OTLP_ENDPOINT
+      - OTEL_RESOURCE_ATTRIBUTES=${OTEL_RESOURCE_ATTRIBUTES},service.criticality=low
+      - OTEL_SERVICE_NAME=support-api
+      - OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED=true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:${SUPPORT_API_PORT}/healthz', timeout=3)"]
+      start_period: 15s
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    depends_on:
+      astronomy-db:
+        condition: service_healthy
+      frontend:
+        condition: service_started
+      otel-collector:
+        condition: service_started
     logging:
       driver: "json-file"
       options:

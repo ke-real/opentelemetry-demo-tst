@@ -16,4 +16,10 @@ defmodule FlagdUiWeb.FeatureController do
 
     json(conn, %{})
   end
+
+  def write_flag(conn, %{"flag" => flag, "variant" => variant}) do
+    GenServer.cast(Storage, {:write, flag, variant})
+
+    json(conn, %{})
+  end
 end

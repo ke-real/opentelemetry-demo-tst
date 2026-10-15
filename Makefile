@@ -377,6 +377,7 @@ start-agentic:
 	@echo "Go to http://localhost:8080/feature/ to change feature flags."
 	@echo "Go to http://localhost:8080/telemetry/ for the Weaver generated telemetry documentation."
 	@echo "Go to http://localhost:8080/chatbot/ for interacting with demo application using an agent."
+	@echo "Shopper MCP: http://localhost:8011/mcp  Support API: http://localhost:8020/docs"
 
 .PHONY: stop
 stop:

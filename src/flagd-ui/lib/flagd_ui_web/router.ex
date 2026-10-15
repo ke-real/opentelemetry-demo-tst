@@ -33,6 +33,7 @@ defmodule FlagdUiWeb.Router do
     get "/read-file", FeatureController, :read
     post "/write", FeatureController, :write
     post "/write-to-file", FeatureController, :write
+    post "/write-flag", FeatureController, :write_flag
   end
 
   # Enable LiveDashboard and Swoosh mailbox preview in development

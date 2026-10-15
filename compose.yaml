@@ -543,7 +543,7 @@ services:
       - OTEL_SERVICE_NAME=product-catalog
       - OTEL_CONFIG_FILE=/otel-config.yml
       - OTEL_SEMCONV_STABILITY_OPT_IN=database
-      - DB_CONNECTION_STRING=postgres://astronomy_user:${POSTGRES_ASTRONOMY_PASSWORD}@${POSTGRES_HOST}/astronomy_db?sslmode=disable
+      - DB_CONNECTION_STRING=postgres://astronomy_user:${POSTGRES_ASTRONOMY_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/astronomy_db?sslmode=disable
     healthcheck:
       test: ["CMD", "/bin/grpc_health_probe", "-addr=:${PRODUCT_CATALOG_PORT}"]
       start_period: 10s
@@ -800,10 +800,11 @@ services:
           memory: 80M
     restart: unless-stopped
     ports:
-      - ${POSTGRES_PORT}
+      - "${POSTGRES_PORT}:${POSTGRES_PORT}"
     command: postgres -c shared_preload_libraries=pg_stat_statements
     environment:
       - POSTGRES_PASSWORD
+      - PGPORT=${POSTGRES_PORT}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready"]
       start_period: 10s
@@ -812,6 +813,7 @@ services:
       retries: 10
     volumes:
       - ./src/postgresql/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - astronomy-db-data:/var/lib/postgresql
     logging: *logging
 
   # Valkey used by Cart service
@@ -876,3 +878,6 @@ services:
       - POSTGRES_PORT
       - POSTGRES_MONITORING_PASSWORD
       - GOMEMLIMIT=160MiB
+
+volumes:
+  astronomy-db-data:
