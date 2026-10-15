@@ -5,16 +5,18 @@ import { DefaultTheme } from 'styled-components';
 
 const Theme: DefaultTheme = {
   colors: {
-    otelBlue: '#5262A8',
-    otelYellow: '#EAAA3B',
-    otelGray: '#403F4B',
-    otelRed: '#FB7181',
-    backgroundGray: 'rgba(64, 63, 75, 0.1)',
-    lightBorderGray: 'rgba(82, 98, 168, 0.3)',
-    borderGray: '#2E2437',
-    textGray: '#29293E',
-    textLightGray: '#78788C',
+    otelBlue: '#E3121B',
+    otelYellow: '#B80F17',
+    otelGray: '#03070F',
+    otelRed: '#FF3B42',
+    backgroundGray: 'rgba(255, 255, 255, 0.04)',
+    lightBorderGray: 'rgba(255, 255, 255, 0.14)',
+    borderGray: '#2B3548',
+    textGray: '#EEF1F6',
+    textLightGray: '#9AA4B6',
     white: '#FFFFFF',
+    background: '#070C16',
+    surface: '#101828',
   },
   breakpoints: {
     desktop: '@media (min-width: 768px)',

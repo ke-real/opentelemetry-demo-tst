@@ -45,14 +45,14 @@ const Checkout: NextPage = () => {
       contextKeys={[...new Set(items.flatMap(({ item }) => item.product.categories))]}
     >
       <Head>
-        <title>Otel Demo - Checkout</title>
+        <title>IT&apos;s awesome - Checkout</title>
       </Head>
       <Layout>
         <S.Checkout>
           <S.Container>
             <S.LeftColumn>
-              <S.Title>Your order is complete!</S.Title>
-              <S.Subtitle>We&apos;ve sent you a confirmation email.</S.Subtitle>
+              <S.Title>Your order is complete. You&apos;ll float too!</S.Title>
+              <S.Subtitle>A confirmation email is already drifting your way.</S.Subtitle>
               <S.OrderInfo>
                 <S.InfoLabel>Order ID:</S.InfoLabel>
                 <S.InfoValue>{orderId}</S.InfoValue>

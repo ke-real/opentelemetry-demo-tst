@@ -7,6 +7,8 @@ export const Select = styled.select`
   width: 100%;
   height: 45px;
   border: 1px solid ${({ theme }) => theme.colors.borderGray};
+  background: ${({ theme }) => theme.colors.surface};
+  color: ${({ theme }) => theme.colors.textGray};
   padding: 10px 16px;
   border-radius: 8px;
   position: relative;

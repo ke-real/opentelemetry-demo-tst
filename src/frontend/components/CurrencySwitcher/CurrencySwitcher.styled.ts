@@ -13,14 +13,14 @@ export const Container = styled.div`
   align-items: center;
   position: relative;
   margin-left: 40px;
-  color: #605f64;
+  color: ${({ theme }) => theme.colors.textLightGray};
 
   &::-webkit-input-placeholder,
   &::-moz-placeholder,
   :-ms-input-placeholder,
   :-moz-placeholder {
     font-size: 12px;
-    color: #605f64;
+    color: ${({ theme }) => theme.colors.textLightGray};
   }
 `;
 

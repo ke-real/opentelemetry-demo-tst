@@ -5,16 +5,16 @@ import Link from 'next/link';
 import styled from 'styled-components';
 
 export const Header = styled.header`
-  background-color: #853b5c;
-  color: white;
+  background-color: ${({ theme }) => theme.colors.otelGray};
+  color: ${({ theme }) => theme.colors.white};
 `;
 
 export const NavBar = styled.nav`
   height: 80px;
-  background-color: white;
+  background-color: ${({ theme }) => theme.colors.otelGray};
   font-size: 15px;
-  color: #b4b2bb;
-  border-bottom: 1px solid ${({ theme }) => theme.colors.textGray};
+  color: ${({ theme }) => theme.colors.textLightGray};
+  border-bottom: 2px solid ${({ theme }) => theme.colors.otelBlue};
   z-index: 1;
   padding: 0;
 
@@ -43,10 +43,15 @@ export const NavBarBrand = styled(Link)`
 `;
 
 export const BrandImg = styled.img.attrs({
-  src: '/images/opentelemetry-demo-logo.png',
+  src: '/images/its-awesome-logo.png',
+  alt: "IT's awesome",
 })`
-  width: 280px;
-  height: auto;
+  height: 56px;
+  width: auto;
+
+  ${({ theme }) => theme.breakpoints.desktop} {
+    height: 76px;
+  }
 `;
 
 export const Controls = styled.div`

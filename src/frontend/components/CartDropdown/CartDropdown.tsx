@@ -40,7 +40,7 @@ const CartDropdown = ({ productList, isOpen, onClose }: IProps) => {
           <span onClick={onClose}>Close</span>
         </S.Header>
         <S.ItemList>
-          {!productList.length && <S.EmptyCart>Your shopping cart is empty</S.EmptyCart>}
+          {!productList.length && <S.EmptyCart>Your cart is empty... for now</S.EmptyCart>}
           {productList.map(
             ({ quantity, product: { name, picture, id, priceUsd = { nanos: 0, currencyCode: 'USD', units: 0 } } }) => (
               <S.Item key={id} data-cy={CypressFields.CartDropdownItem}>

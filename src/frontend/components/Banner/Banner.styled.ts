@@ -16,7 +16,8 @@ export const Banner = styled.div`
 `;
 
 export const BannerImg = styled.img.attrs({
-  src: '/images/Banner.png',
+  src: '/images/its-awesome-banner.jpg',
+  alt: "IT's awesome: a red balloon over a storm drain",
 })`
   width: 100%;
   height: auto;

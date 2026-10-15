@@ -4,10 +4,10 @@
 import styled, { css } from 'styled-components';
 
 const Button = styled.button<{ $type?: 'primary' | 'secondary' | 'link' }>`
-  background-color: #5262a8;
-  color: white;
+  background-color: ${({ theme }) => theme.colors.otelBlue};
+  color: ${({ theme }) => theme.colors.white};
   display: inline-block;
-  border: solid 1px #5262a8;
+  border: solid 1px ${({ theme }) => theme.colors.otelBlue};
   padding: 8px 16px;
   outline: none;
   font-weight: 700;
@@ -21,14 +21,14 @@ const Button = styled.button<{ $type?: 'primary' | 'secondary' | 'link' }>`
     $type === 'secondary' &&
     css`
       background: none;
-      color: #5262a8;
+      color: ${({ theme }) => theme.colors.otelRed};
     `};
 
   ${({ $type = 'primary' }) =>
     $type === 'link' &&
     css`
       background: none;
-      color: #5262a8;
+      color: ${({ theme }) => theme.colors.otelRed};
       border: none;
     `};
 `;

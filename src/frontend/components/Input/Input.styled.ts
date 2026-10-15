@@ -13,8 +13,9 @@ export const Input = styled.input`
   font-size: ${({ theme }) => theme.sizes.dMedium};
 
   border-radius: 10px;
-  background: #f9f9f9;
-  border: 1px solid #cacaca;
+  background: ${({ theme }) => theme.colors.surface};
+  color: ${({ theme }) => theme.colors.textGray};
+  border: 1px solid ${({ theme }) => theme.colors.borderGray};
 `;
 
 export const InputLabel = styled.p`
@@ -33,8 +34,9 @@ export const Select = styled.select`
   font-size: ${({ theme }) => theme.sizes.dMedium};
 
   border-radius: 10px;
-  background: #f9f9f9;
-  border: 1px solid #cacaca;
+  background: ${({ theme }) => theme.colors.surface};
+  color: ${({ theme }) => theme.colors.textGray};
+  border: 1px solid ${({ theme }) => theme.colors.borderGray};
 `;
 
 export const InputRow = styled.div`

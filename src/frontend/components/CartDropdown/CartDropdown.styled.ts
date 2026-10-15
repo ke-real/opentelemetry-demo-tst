@@ -17,7 +17,7 @@ export const CartDropdown = styled.div`
   flex-direction: column;
   align-items: center;
   gap: 24px;
-  background: ${({ theme }) => theme.colors.white};
+  background: ${({ theme }) => theme.colors.surface};
   z-index: 1000;
   border-radius: 5px;
   box-shadow: 0 2px 2px 0 rgb(0 0 0 / 14%), 0 3px 1px -2px rgb(0 0 0 / 12%), 0 1px 5px 0 rgb(0 0 0 / 20%);

@@ -133,7 +133,7 @@ export const OrderItem = styled.div`
   gap: 16px;
   align-items: center;
   padding: 16px;
-  background-color: ${({ theme }) => theme.colors.white};
+  background-color: ${({ theme }) => theme.colors.surface};
   border: 1px solid ${({ theme }) => theme.colors.lightBorderGray};
   border-radius: 8px;
 `;

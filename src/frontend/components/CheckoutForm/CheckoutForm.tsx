@@ -161,7 +161,7 @@ const CheckoutForm = ({ onSubmit }: IProps) => {
           <option value="9">September</option>
           <option value="10">October</option>
           <option value="11">November</option>
-          <option value="12">January</option>
+          <option value="12">December</option>
         </Input>
         <Input
           label="Year"

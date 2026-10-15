@@ -17,14 +17,14 @@ html, body {
 }
 
 body {
-  background: white;
+  background: #070C16;
   margin: 0px;
   font-family: 'Open Sans', sans-serif;
 }
 
 body * {
   box-sizing: border-box;
-  color: #29293E;
+  color: #EEF1F6;
   font-weight: 600;
 }
 

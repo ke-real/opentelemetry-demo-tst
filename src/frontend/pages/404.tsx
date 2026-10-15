@@ -12,11 +12,11 @@ const NotFoundPage: NextPage = () => {
   return (
     <>
       <Head>
-        <title>Otel Demo - Page Not Found</title>
+        <title>IT&apos;s awesome - Page Not Found</title>
       </Head>
       <S.Container>
         <S.Code>404</S.Code>
-        <S.Message>This page could not be found.</S.Message>
+        <S.Message>This page went down the drain.</S.Message>
         <S.HomeLink href="/">Go to homepage</S.HomeLink>
       </S.Container>
     </>

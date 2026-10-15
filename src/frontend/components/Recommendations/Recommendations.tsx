@@ -16,7 +16,7 @@ const Recommendations = () => {
   return (
     <S.Recommendations data-cy={CypressFields.RecommendationList}>
       <S.TitleContainer>
-        <S.Title>You May Also Like</S.Title>
+        <S.Title>You&apos;ll Float for These Too</S.Title>
       </S.TitleContainer>
       <S.ProductList>
         {recommendedProductList.map(product => (

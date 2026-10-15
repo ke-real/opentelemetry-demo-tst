@@ -16,6 +16,8 @@ declare module 'styled-components' {
       textGray: string; 
       textLightGray: string;
       white: string;
+      background: string;
+      surface: string;
     };
     sizes: {
       mLarge: string;

@@ -12,11 +12,11 @@ const ServerErrorPage: NextPage = () => {
   return (
     <>
       <Head>
-        <title>Otel Demo - Server Error</title>
+        <title>IT&apos;s awesome - Server Error</title>
       </Head>
       <S.Container>
         <S.Code>500</S.Code>
-        <S.Message>A server-side error occurred. Please try again.</S.Message>
+        <S.Message>Something went wrong down here. Please try again.</S.Message>
         <S.HomeLink href="/">Go to homepage</S.HomeLink>
       </S.Container>
     </>
