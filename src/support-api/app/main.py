@@ -25,7 +25,7 @@ tooling such as a support MCP server.
 * **Reads** (orders, timelines, carts, flags, diagnostics) need `Shop.Viewer`. PII is redacted; `include_pii=true`
   needs `Support.Admin`.
 * **Writes** go through actions with a human in the loop: `proposeAction` (dry run with plan; role per action type,
-  see `listActionTypes`) → `approveAction` / `rejectAction` (`Support.Approver`, not the requester) →
+  see `listActionTypes`) → `approveAction` / `rejectAction` (`Support.Approver`, not the requester; `Support.Admin` may approve their own) →
   `executeAction` (requester or `Support.Admin`). Only the approved plan is executed.
 
 Auth: `Authorization: Bearer <OIDC access token>` with `aud: support-api`; the caller's identity and roles come from
@@ -175,15 +175,15 @@ async def getAction(action_id: str, _: Principal = Depends(support_staff)):
 
 
 @v1.post("/actions/{action_id}/approve", tags=["actions"],
-         summary="Approve a proposed action (Support.Approver; not your own when distinct approvers are required)")
+         summary="Approve a proposed action (Support.Approver or Support.Admin; only admins may approve their own)")
 async def approveAction(action_id: str, body: DecisionRequest | None = None,
-                        principal: Principal = Depends(require(APPROVER))):
+                        principal: Principal = Depends(require(APPROVER, ADMIN))):
     return await actions.decide(action_id, True, principal, body.comment if body else None)
 
 
-@v1.post("/actions/{action_id}/reject", tags=["actions"], summary="Reject a proposed action (Support.Approver)")
+@v1.post("/actions/{action_id}/reject", tags=["actions"], summary="Reject a proposed action (Support.Approver or Support.Admin)")
 async def rejectAction(action_id: str, body: DecisionRequest | None = None,
-                       principal: Principal = Depends(require(APPROVER))):
+                       principal: Principal = Depends(require(APPROVER, ADMIN))):
     return await actions.decide(action_id, False, principal, body.comment if body else None)
 
 

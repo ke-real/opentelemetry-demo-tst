@@ -40,10 +40,11 @@ A support MCP gets such a token by **exchanging the user's MCP token** at Keyclo
 |---|---|
 | `Shop.Viewer` | all reads, PII redacted; `listActionTypes` |
 | `Support.Agent` (includes Viewer) | propose `resend_order_confirmation`, `reship_order`, `reset_cart`; list/get actions; execute **own** approved actions |
-| `Support.Approver` (includes Viewer) | approve / reject; list/get actions; audit log |
-| `Support.Admin` (includes Agent) | propose `replay_order`, `set_feature_flag`; `include_pii=true`; unmasked shopper replay; execute anyone's approved action; audit log |
+| `Support.Approver` (includes Viewer) | approve / reject others' actions; list/get actions; audit log |
+| `Support.Admin` (includes Agent) | propose `replay_order`, `set_feature_flag`; `include_pii=true`; unmasked shopper replay; approve / reject any action, **including their own**; execute anyone's approved action; audit log |
 
-- **Four eyes:** with `SUPPORT_REQUIRE_DISTINCT_APPROVER=true` (default), nobody approves their own proposal, admins included.
+- **Four eyes:** with `SUPPORT_REQUIRE_DISTINCT_APPROVER=true` (default), nobody approves their own proposal, except
+  `Support.Admin`: admins may approve (and reject) any action, including their own.
 - The role hierarchy is applied by the API too, so it also holds for providers without composite roles.
 - `GET /v1/me` shows the caller's name and effective roles. `listActionTypes` marks each type `allowed` for the caller.
 - API-key callers all act as the identity `service`. Their optional `X-Support-Actor` is recorded in the audit
@@ -100,7 +101,7 @@ POST /v1/actions/{id}/execute       → EXECUTED | FAILED     (result / error)
 - `Idempotency-Key` header on propose: the same key returns the existing action (HTTP 200 instead of 201).
   Reusing another requester's key returns `409 idempotency_key_conflict`.
 - `execute` is idempotent: calling it again on `EXECUTED`/`FAILED` returns the stored outcome.
-- `SUPPORT_REQUIRE_DISTINCT_APPROVER=true` (default) → the requester can't approve their own action (`403 approver_must_differ`).
+- `SUPPORT_REQUIRE_DISTINCT_APPROVER=true` (default) → the requester can't approve their own action (`403 approver_must_differ`), unless they are `Support.Admin`.
 
 ### Recommended pattern in the support MCP
 

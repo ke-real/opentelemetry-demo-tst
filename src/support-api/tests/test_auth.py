@@ -76,7 +76,6 @@ def test_unknown_action_type_is_422_before_role_check(client):
 @pytest.mark.parametrize("path", [f"/v1/actions/{FAKE_ACTION}/approve", f"/v1/actions/{FAKE_ACTION}/reject"])
 def test_only_approvers_decide(client, path):
     assert client.post(path, headers=bearer(user="agent", roles=("Support.Agent",))).status_code == 403
-    assert client.post(path, headers=bearer(user="admin", roles=("Support.Admin",))).status_code == 403
 
 
 def test_viewer_cannot_execute_or_list_actions_or_audit(client):

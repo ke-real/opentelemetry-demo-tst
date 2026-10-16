@@ -313,7 +313,8 @@ async def decide(action_id: str, approve: bool, principal: Principal, comment: s
     row = await _get(action_id)
     if row["status"] != "PENDING_APPROVAL":
         raise ApiError(409, "invalid_state", f"Action is {row['status']}, expected PENDING_APPROVAL", {"status": row["status"]})
-    if approve and settings.require_distinct_approver and principal.kind != "anonymous" and actor == row["requested_by"]:
+    if (approve and settings.require_distinct_approver and principal.kind != "anonymous" and not principal.has(ADMIN)
+            and actor == row["requested_by"]):
         raise ApiError(403, "approver_must_differ", "The requester cannot approve their own action")
     status = "APPROVED" if approve else "REJECTED"
     row = await db.fetch_one(

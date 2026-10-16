@@ -73,6 +73,12 @@ async def test_other_approver_can_approve(store):
     assert store["audit"] == [("APPROVED", "approver")]
 
 
+async def test_admin_can_approve_own_action(store):
+    store["row"] = row(requested_by="admin")
+    out = await actions.decide(ACTION_ID, True, user("admin", ADMIN), "self-approved")
+    assert out["status"] == "APPROVED" and out["decided_by"] == "admin"
+
+
 async def test_api_key_callers_cannot_self_approve_by_changing_actor(store):
     store["row"] = row(requested_by="service")
     svc = Principal("service", expand([AGENT, APPROVER]), "service", on_behalf="someone-else")
